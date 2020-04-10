@@ -11,6 +11,7 @@ import random
 import io
 import pickle
 import json
+from pprint import pprint
 from datetime import datetime
 import urllib.parse
 import sqlite3
@@ -21,9 +22,8 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import logging
 
-import config
+from track import config
 import utils
-
 
 # gets rid of annoying logs for expected missing tables
 logging.getLogger('aiosqlite').setLevel(logging.CRITICAL)
@@ -99,7 +99,7 @@ THRESHOLDS: List[ArmorThreshold] = [ArmorThreshold(k, name, TierBound(*bound))
                                     for name, bound in v.items()]
 BASE_FP: Dict[Tier, float] = {k: v for k, v in _base_fp.items()}
 
-del _matchmaking
+# del _matchmaking
 del _thresholds
 
 
@@ -335,6 +335,226 @@ class WoWS(commands.Cog):
                               description='[Throttle Jockeying](https://www.youtube.com/watch?v=dQw4w9WgXcQ)'  # rickroll
                                           '[CV Reticules Overview](https://www.youtube.com/watch?v=d1YBv2mWll0)')  # jebaited
         await ctx.send(embed=embed)
+    @commands.command(brief='gives a list of ships and classes that outspot and spot a given ship.')
+    async def outspot(self, ctx, *, ship: Ship):
+        ship_nations = {'Europe': 'European', 'Germany' : 'German', 'Japan' : 'Japanese', 'USA' : 'American', 'France' : 'French', 'Italy' : 'Italian', 'Russia' : 'Soviet', 'United_Kingdom' : 'British', 'Pan_Asia' : 'Pan Asian', 'Commonwealth' : 'Commonwealth'}
+        ship_nc = {}
+        mat = {}
+        result = f'\n'
+        str1 = ""
+        curr_nation = ship.params['typeinfo']['nation']
+        curr_class = ship.params['typeinfo']['species']
+        nothing = True;
+        for key, value in ship.params.items():
+            if key == 'HullDefault':
+                str1 = 'HullDefault'
+                break
+            if "A_Hull" in key:
+                str1 = key
+                break
+            if "B_Hull" in key:
+                str1 = key
+                break
+            if "C_Hull" in key:
+                str1 = key
+                break
+        all_destroyers = True
+        all_cruisers = True
+        all_battleships = True
+        all_carriers = True
+        for name in self.bot.mapping.keys():
+            cmp = await Ship.convert(ctx, name)
+            lb = _matchmaking[ship.params['level']][0]
+            rb = _matchmaking[ship.params['level']][1]
+            if cmp.name[len(cmp.name)-1] == ')':
+                continue
+            if not cmp.params['level'] >= lb or not cmp.params['level'] <= rb:
+                continue
+            str2 = ""
+            for key, value in cmp.params.items():
+                if key == 'HullDefault':
+                    str2 = 'HullDefault'
+                    break
+                if "A_Hull" in key:
+                    str2 = key
+                    break
+                if "B_Hull" in key:
+                    str2 = key
+                    break
+                if "C_Hull" in key:
+                    str2 = key
+                    break
+                if "Hull" in key:
+                    str2 = key
+                    break
+            c1 = ship.params[str1]['visibilityFactor']
+            c2 = cmp.params[str2]['visibilityFactor']
+            if ship.params['level'] >= 8:
+                c1 *= .9
+            if cmp.params['level'] >= 8:
+                c2 *= .9
+            if c2 >= c1 and cmp.params['typeinfo']['species'] == 'Destroyer':
+                all_destroyers = False
+            if c2 >= c1 and cmp.params['typeinfo']['species'] == 'Cruiser':
+                all_cruisers = False
+            if c2 >= c1 and cmp.params['typeinfo']['species'] == 'Battleship':
+                all_battleships = False
+            if c2 >= c1 and cmp.params['typeinfo']['species'] == 'AirCarrier':
+                all_carriers = False
+            cmp_nation = cmp.params['typeinfo']['nation']
+            cmp_class = cmp.params['typeinfo']['species']
+            if cmp_nation not in ship_nc:
+                ship_nc[cmp_nation] = {}
+            if cmp_class not in ship_nc[cmp_nation]:
+                ship_nc[cmp_nation][cmp_class] = []
+            ship_nc[cmp_nation][cmp_class].append(name)
+            if cmp_nation not in mat:
+                mat[cmp_nation] = {}
+            if cmp_class not in mat[cmp_nation]:
+                mat[cmp_nation][cmp_class] = False
+        if all_destroyers == True:
+            result+=(f'All destroyers\n')
+            nothing = False
+        if all_cruisers == True:
+            result+=(f'All cruisers\n')
+            nothing = False
+        if all_battleships == True:
+            result+=(f'All battleships\n')
+            nothing = False
+        if all_carriers == True:
+            result+=(f'All carriers\n')
+            nothing = False
+
+        # with open('result.json', 'w') as fp:
+        #     json.dump(ship_nc, fp)
+        # with open('result.json') as data_file:
+        #     data = json.load(data_file)
+        # pprint(data)
+        for key_orig in ship_nc.keys():
+            for cmp_class in ship_nc[key_orig].keys():
+                value = ship_nc[key_orig][cmp_class]
+                if cmp_class == 'Destroyer' and all_destroyers == True:
+                    continue
+                if cmp_class == 'Cruiser' and all_cruisers == True:
+                    continue
+                if cmp_class == 'Battleship' and all_battleships == True:
+                    continue
+                if cmp_class == 'AirCarrier' and all_carriers == True:
+                    continue
+                all_outspot = True
+                for name in value:
+                    cmp = await Ship.convert(ctx, name)
+                    lb = _matchmaking[ship.params['level']][0]
+                    rb = _matchmaking[ship.params['level']][1]
+                    if cmp.name[len(cmp.name) - 1] == ')':
+                        continue
+                    if not cmp.params['level'] >= lb or not cmp.params['level'] <= rb:
+                        continue
+                    str2 = ""
+                    for key2, value2 in cmp.params.items():
+                        if key2 == 'HullDefault':
+                            str2 = 'HullDefault'
+                            break
+                        if "A_Hull" in key2:
+                            str2 = key2
+                            break
+                        if "B_Hull" in key2:
+                            str2 = key2
+                            break
+                        if "C_Hull" in key2:
+                            str2 = key2
+                            break
+                        if "Hull" in key2:
+                            str2 = key2
+                            break
+                    c1 = ship.params[str1]['visibilityFactor']
+                    c2 = cmp.params[str2]['visibilityFactor']
+                    if ship.params['level'] >= 8:
+                        c1 *= .9
+                    if cmp.params['level'] >= 8:
+                        c2 *= .9
+                    if c2 >= c1:
+                        all_outspot = False
+                        # print(key_orig)
+                        # print(cmp_class + "kekw")
+                if all_outspot == True:
+                    # print(key_orig)
+                    # print(cmp_class)
+                    mat[key_orig][cmp_class] = True
+                    if cmp_class == 'AirCarrier':
+                         result += (f'All {ship_nations[key_orig]} Aircraft Carriers\n')
+                         nothing = False
+                    else:
+                        result += (f'All {ship_nations[key_orig]} {cmp_class}s\n')
+                        nothing = False
+        for name in self.bot.mapping.keys():
+            cmp = await Ship.convert(ctx, name)
+            lb = _matchmaking[ship.params['level']][0]
+            rb = _matchmaking[ship.params['level']][1]
+            if cmp.name[len(cmp.name)-1] == ')':
+                continue
+            if not cmp.params['level'] >= lb or not cmp.params['level'] <= rb:
+                continue
+            str2 = ""
+            for key, value in cmp.params.items():
+                if key == 'HullDefault':
+                    str2 = 'HullDefault'
+                    break
+                if "A_Hull" in key:
+                    str2 = key
+                    break
+                if "B_Hull" in key:
+                    str2 = key
+                    break
+                if "C_Hull" in key:
+                    str2 = key
+                    break
+                if "Hull" in key:
+                    str2 = key
+                    break
+            cmp_nation = cmp.params['typeinfo']['nation']
+            cmp_class = cmp.params['typeinfo']['species']
+            if cmp_class == 'Destroyer' and all_destroyers == True:
+                continue
+            if cmp_class == 'Cruiser' and all_cruisers == True:
+                continue
+            if cmp_class == 'Battleship' and all_battleships == True:
+                continue
+            if cmp_class == 'AirCarrier' and all_carriers == True:
+                continue
+            c1 = ship.params[str1]['visibilityFactor']
+            c2 = cmp.params[str2]['visibilityFactor']
+            if ship.params['level'] >= 8:
+                c1 *= .9
+            if cmp.params['level'] >= 8:
+                c2 *= .9
+            if cmp_nation not in mat or mat[cmp_nation][cmp_class] == False:
+                if c2 < c1:
+                    result += (f'{name}\n')
+                    nothing = False
+        embed = discord.Embed(title=ship.name,
+                              description=f'Data extracted from WoWS {VERSION}.',
+                              color=self.bot.color)
+        embed.set_author(
+            icon_url='https://cdn.discordapp.com/attachments/651324664496521225/651332148963442688/logo.png',
+            name=ship.params['name'])
+        if (nothing == False):
+            embed.add_field(name='Ships that outspot you:', value=result, inline=False)
+        else:
+            embed.add_field(name='Ships that outspot you:', value='Nothing outspots you. You are a stealthy girl.', inline=False)
+        await ctx.send(embed=embed)
+
+
+
+    @commands.command(brief='gives information about the ship')
+    async def shipdetails(self, ctx, *, ship: Ship):
+        with open('result.json', 'w') as fp:
+            json.dump(ship.params, fp)
+        with open('result.json') as data_file:
+            data = json.load(data_file)
+        pprint(data)
+        for key, value in ship.params.items():
+            print(key, value)
 
     @commands.command(aliases=['ifhe'], brief='Calculates HE pen & IFHE.')
     async def he(self, ctx, *, ship: Ship):
